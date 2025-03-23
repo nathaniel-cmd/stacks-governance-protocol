@@ -157,3 +157,24 @@
         (mint-tokens tx-sender amount)
     )
 )
+
+(define-public (withdraw (amount uint))
+    (begin
+        (try! (check-initialized))
+        (asserts! (> amount u0) err-zero-amount)
+
+        (let (
+            (deposit-info (unwrap! (map-get? deposits tx-sender) err-unauthorized))
+            (user-balance (unwrap! (get-balance tx-sender) err-unauthorized))
+        )
+            (asserts! (>= block-height (get lock-until deposit-info)) err-locked-period)
+            (asserts! (>= user-balance amount) err-insufficient-balance)
+            
+            ;; Burn tokens first
+            (try! (burn-tokens tx-sender amount))
+            
+            ;; Transfer STX back to user
+            (as-contract (stx-transfer? amount (as-contract tx-sender) tx-sender))
+        )
+    )
+)
