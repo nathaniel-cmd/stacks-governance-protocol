@@ -115,3 +115,45 @@
         (ok true)
     )
 )
+
+(define-private (burn-tokens (account principal) (amount uint))
+    (let (
+        (current-balance (default-to u0 (map-get? balances account)))
+    )
+        (asserts! (>= current-balance amount) err-insufficient-balance)
+        (map-set balances account (- current-balance amount))
+        (var-set total-supply (- (var-get total-supply) amount))
+        (ok true)
+    )
+)
+
+;; Public Functions
+(define-public (initialize)
+    (begin
+        (asserts! (is-contract-owner) err-owner-only)
+        (asserts! (not (var-get initialized)) err-already-initialized)
+        (var-set initialized true)
+        (ok true)
+    )
+)
+
+(define-public (deposit (amount uint))
+    (begin
+        (try! (check-initialized))
+        (asserts! (>= amount (var-get minimum-deposit)) err-below-minimum)
+        (asserts! (> amount u0) err-zero-amount)
+
+        ;; Transfer STX to contract
+        (try! (stx-transfer? amount tx-sender (as-contract tx-sender)))
+        
+        ;; Update deposit records
+        (map-set deposits tx-sender {
+            amount: amount,
+            lock-until: (+ block-height (var-get lock-period)),
+            last-reward-block: block-height
+        })
+        
+        ;; Mint fund tokens
+        (mint-tokens tx-sender amount)
+    )
+)
